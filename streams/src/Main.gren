@@ -1,0 +1,61 @@
+module Main exposing (main)
+
+import Node
+import Init
+import Stream
+import FileSystem
+import FileSystem.Path as Path
+import Task
+import Bytes exposing (Bytes)
+
+
+main : Node.Program Model Msg
+main =
+    Node.defineProgram
+        { init = init
+        , update = update
+        , subscriptions = \_ -> Sub.none
+        }
+
+
+type alias Model =
+    {}
+
+
+type Msg
+    = NoOp (Result Stream.Error (Stream.Writable Bytes))
+
+
+init : Node.Environment -> Init.Task { model : Model, command : Cmd Msg }
+init env =
+    Init.await FileSystem.initialize <| \fsPerm ->
+        Node.startProgram
+            { model = {}
+            , command =
+                case Array.get 2 env.args of
+                    Just "hello world" ->
+                        Stream.writeStringAsBytes "Hello, world!" env.stdout
+                            |> Task.attempt NoOp
+                    
+                    Just unknownCommand ->
+                        Stream.writeStringAsBytes ("Failed to recognize command: " ++ unknownCommand) env.stderr
+                            |> Task.attempt NoOp
+
+                    Nothing ->
+                        Stream.writeStringAsBytes "Missing command" env.stderr
+                            |> Task.attempt NoOp
+
+                        {-FileSystem.readFileStream fsPerm (Path.fromPosixString "myFile.txt")
+                            |> Task.mapError (\_ -> "file error")
+                            |> Task.andThen (Task.mapError (\_ -> "stream error") << Stream.readBytesAsString)
+                            |> Task.map .value
+                            |> Task.attempt NoOp
+                        -}
+            }
+
+
+update : Msg -> Model -> { model : Model, command : Cmd Msg }
+update msg model =
+    { model = model
+    , command = Cmd.none
+    }
