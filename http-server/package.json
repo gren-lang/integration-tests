@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.33.0",
+    "gren-lang": "0.4.5"
+  },
+  "scripts": {
+    "postinstall": "npx playwright install"
+  }
+}

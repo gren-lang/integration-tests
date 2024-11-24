@@ -1,0 +1,17 @@
+{
+  "name": "http-client",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "clet": "^1.0.1",
+    "gren-lang": "^0.4.5",
+    "mocha": "^10.2.0",
+    "mockttp": "^3.10.0"
+  }
+}
