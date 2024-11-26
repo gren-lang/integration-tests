@@ -7,6 +7,7 @@ import FileSystem
 import FileSystem.Path as Path
 import Task
 import Bytes exposing (Bytes)
+import Process
 
 
 main : Node.Program Model Msg
@@ -23,7 +24,13 @@ type alias Model =
 
 
 type Msg
-    = NoOp (Result Stream.Error (Stream.Writable Bytes))
+    = Exit (Result Stream.Error (Stream.Writable Bytes))
+    | ExitAfterPipe (Result InvolvedError {})
+
+
+type InvolvedError
+    = StreamError Stream.Error
+    | FileError FileSystem.Error
 
 
 init : Node.Environment -> Init.Task { model : Model, command : Cmd Msg }
@@ -35,40 +42,88 @@ init env =
                 case Array.get 2 env.args of
                     Just "hello world" ->
                         Stream.writeLineAsBytes "Hello, world!" env.stdout
-                            |> Task.attempt NoOp
+                            |> Task.attempt Exit
                     
                     Just "greet" ->
                         Stream.writeStringAsBytes "State your name: " env.stdout
                             |> Task.andThen (\_ -> Stream.readBytesAsString env.stdin)
-                            |> Task.map .value
                             |> Task.map (Maybe.withDefault "")
                             |> Task.andThen (\name -> Stream.writeLineAsBytes ("Hello " ++ name) env.stdout)
-                            |> Task.attempt NoOp
+                            |> Task.attempt Exit
+                    
+                    Just "fromArray" ->
+                        Stream.fromArray [ "one", "two", "four" ]
+                            |> Task.andThen
+                                (\readable ->
+                                    Stream.read readable
+                                        |> Task.andThen (\input -> Stream.writeLineAsBytes input env.stdout)
+                                        |> Task.andThen (\_ -> Stream.read readable)
+                                        |> Task.andThen (\input -> Stream.writeLineAsBytes input env.stdout)
+                                        |> Task.andThen (\_ -> Stream.read readable)
+                                        |> Task.andThen (\input -> Stream.writeLineAsBytes input env.stdout)
+                                        |> Task.andThen (\_ -> Stream.read readable)
+                                        |> Task.andThen (\_ -> Stream.writeLineAsBytes "NOT CLOSED" env.stdout)
+                                        |> Task.onError (\err -> 
+                                            case err of
+                                                Stream.Closed ->
+                                                    Stream.writeLineAsBytes "CLOSED" env.stdout
+                                                
+                                                _ ->
+                                                    Stream.writeLineAsBytes "NOT CLOSED" env.stdout
+                                        )
+                                )
+                            |> Task.attempt Exit
+
+                    Just "compression" ->
+                        FileSystem.writeFileStream fsPerm (Path.fromPosixString "compressed.txt")
+                            |> Task.mapError FileError
+                            |> Task.andThen 
+                                (\fileStream ->
+                                    Stream.writeStringAsBytes "input: " env.stdout
+                                        |> Task.andThen (\_ -> Stream.read env.stdin)
+                                        |> Task.andThen (\fromStdin -> Stream.fromArray [ fromStdin ])
+                                        |> Task.andThen (Stream.awaitAndPipeThrough Stream.gzipCompression)
+                                        |> Task.andThen (Stream.pipeTo fileStream)
+                                        |> Task.andThen (\_ -> Stream.writeLineAsBytes "Done" env.stdout)
+                                        |> Task.map (\_ -> {})
+                                        |> Task.mapError StreamError
+                                )
+                            |> Task.attempt ExitAfterPipe
+                    
+                    Just "decompression" ->
+                        FileSystem.readFileStream fsPerm (Path.fromPosixString "compressed.txt")
+                            |> Task.mapError FileError
+                            |> Task.andThen 
+                                (\fileStream ->
+                                    Stream.awaitAndPipeThrough Stream.gzipDecompression fileStream
+                                        |> Task.andThen (Stream.pipeTo env.stdout)
+                                        |> Task.mapError StreamError
+                                )
+                            |> Task.attempt ExitAfterPipe
                     
                     Just unknownCommand ->
                         Stream.writeLineAsBytes ("Failed to recognize command: " ++ unknownCommand) env.stderr
-                            |> Task.attempt NoOp
+                            |> Task.attempt Exit
 
                     Nothing ->
                         Stream.writeLineAsBytes "Missing command" env.stderr
-                            |> Task.attempt NoOp
-
-                        {-FileSystem.readFileStream fsPerm (Path.fromPosixString "myFile.txt")
-                            |> Task.mapError (\_ -> "file error")
-                            |> Task.andThen (Task.mapError (\_ -> "stream error") << Stream.readBytesAsString)
-                            |> Task.map .value
-                            |> Task.attempt NoOp
-                        -}
+                            |> Task.attempt Exit
             }
 
 
 update : Msg -> Model -> { model : Model, command : Cmd Msg }
 update msg model =
     case msg of
-        NoOp _ ->
+        Exit _ ->
             { model = model
             , command =
                 -- Something special when dealing with CLET, so reading from stdin seems to
                 -- prevent node from closing. Solving this by closing manually.
+                Node.exit |> Task.execute
+            }
+
+        ExitAfterPipe result ->
+            { model = model
+            , command =
                 Node.exit |> Task.execute
             }
