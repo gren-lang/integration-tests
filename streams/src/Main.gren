@@ -20,12 +20,13 @@ main =
 
 
 type alias Model =
-    {}
+    { stdout : Stream.Writable Bytes }
 
 
 type Msg
     = Exit (Result Stream.Error (Stream.Writable Bytes))
     | ExitAfterPipe (Result InvolvedError {})
+    | TransformationStreamCreated (Result Stream.Error (Stream.Transformation Bytes Bytes))
 
 
 type InvolvedError
@@ -37,7 +38,7 @@ init : Node.Environment -> Init.Task { model : Model, command : Cmd Msg }
 init env =
     Init.await FileSystem.initialize <| \fsPerm ->
         Node.startProgram
-            { model = {}
+            { model = { stdout = env.stdout }
             , command =
                 case Array.get 2 env.args of
                     Just "hello world" ->
@@ -73,6 +74,10 @@ init env =
                                         )
                                 )
                             |> Task.attempt Exit
+                    
+                    Just "errorHandling" ->
+                        Stream.identityTransformation
+                            |> Task.attempt TransformationStreamCreated
 
                     Just "compression" ->
                         FileSystem.writeFileStream fsPerm (Path.fromPosixString "compressed.txt")
@@ -126,4 +131,40 @@ update msg model =
             { model = model
             , command =
                 Node.exit |> Task.execute
+            }
+
+        TransformationStreamCreated (Err _) ->
+            { model = model
+            , command =
+                Stream.writeLineAsBytes "Failed to created transformation stream" model.stdout
+                    |> Task.attempt Exit
+            }
+        
+        TransformationStreamCreated (Ok idStream) ->
+            { model = model
+            , command =
+                Cmd.batch
+                    [ Stream.read (Stream.readable idStream)
+                        |> Task.andThen (\value -> Stream.write value model.stdout)
+                        |> Task.onError (\err -> 
+                            case err of
+                                Stream.Closed ->
+                                    Stream.writeLineAsBytes "CLOSED" model.stdout
+
+                                Stream.Cancelled reason ->
+                                    Stream.writeLineAsBytes ("CANCELLED: " ++ reason) model.stdout
+                                
+                                Stream.Locked ->
+                                    Stream.writeLineAsBytes "LOCKED" model.stdout
+                        )
+                        |> Task.attempt Exit
+                    , Stream.cancelWritable "foo" (Stream.writable idStream)
+                        |> Task.onError 
+                            (\_ ->
+                                Stream.writeLineAsBytes "Failed to cancel stream" model.stdout
+                                    |> Task.map (\_ -> {})
+                            )
+                        |> Task.onError (\_ -> Task.succeed {})
+                        |> Task.execute
+                    ]
             }

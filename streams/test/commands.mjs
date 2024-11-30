@@ -32,6 +32,13 @@ describe("Streams", () => {
       .stdout("CLOSED");
   });
   
+  it("errorHandling", async () => {
+    await runner()
+      .cwd(baseDir)
+      .fork("app", ["errorHandling"], {})
+      .stdout("CANCELLED: foo")
+  });
+  
   it("compression", async () => {
     await runner()
       .cwd(baseDir)
