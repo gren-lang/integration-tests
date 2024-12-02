@@ -119,7 +119,14 @@ init env =
 update : Msg -> Model -> { model : Model, command : Cmd Msg }
 update msg model =
     case msg of
-        Exit _ ->
+        Exit (Err err) ->
+            { model = model
+            , command =
+                Stream.writeLineAsBytes ("Failed Exit with error: " ++ Debug.toString err) model.stdout
+                    |> Task.attempt Exit
+            }
+        
+        Exit (Ok _) ->
             { model = model
             , command =
                 -- Something special when dealing with CLET, so reading from stdin seems to
@@ -127,7 +134,14 @@ update msg model =
                 Node.exit |> Task.execute
             }
 
-        ExitAfterPipe result ->
+        ExitAfterPipe (Err err) ->
+            { model = model
+            , command =
+                Stream.writeLineAsBytes ("Failed ExitAfterPipe with error: " ++ Debug.toString err) model.stdout
+                    |> Task.attempt Exit
+            }
+        
+        ExitAfterPipe (Ok _) ->
             { model = model
             , command =
                 Node.exit |> Task.execute
