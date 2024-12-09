@@ -3,7 +3,7 @@ module Main exposing (main)
 import Node
 import Bytes exposing (Bytes)
 import Dict
-import Stream exposing (Stream)
+import Stream
 import Node exposing (Environment, Program)
 import FileSystem
 import FileSystem.Path as Path
@@ -24,8 +24,8 @@ main =
 
 
 type alias Model =
-    { stdout : Stream
-    , stderr : Stream
+    { stdout : Stream.Writable Bytes
+    , stderr : Stream.Writable Bytes
     , server : Maybe Http.Server
     , fsPermission : FileSystem.Permission
     }
@@ -33,8 +33,8 @@ type alias Model =
 
 type Msg
     = CreateServerResult (Result Http.ServerError Http.Server)
-    | GotRequest Http.Request Response
-    | GotJpeg Response (Result FileSystem.Error Bytes)
+    | GotRequest { request : Http.Request, response : Response }
+    | GotJpeg { response : Response, result : (Result FileSystem.Error Bytes) }
 
 
 init : Environment -> Init.Task { model : Model, command : Cmd Msg }
@@ -59,34 +59,37 @@ init env =
 
 update : Msg -> Model -> { model : Model, command : Cmd Msg }
 update msg model =
-    case msg of
+    when msg is
         CreateServerResult result ->
-            case result of
+            when result is
                 Ok server ->
                     { model = { model | server = Just server }
                     , command = 
-                        Stream.sendLine model.stdout "Server started"
+                        Stream.writeLineAsBytes "Server started" model.stdout 
+                            |> Task.map (\_ -> {})
+                            |> Task.onError (\_ -> Task.succeed {})
                             |> Task.execute
                     }
-                Err (ServerError code message) ->
+                Err (ServerError { code, message }) ->
                     { model = model
                     , command =
-                        "Server failed to start: " ++ code ++ "\n" ++ message
-                            |> Stream.sendLine model.stderr
+                        Stream.writeLineAsBytes ("Server failed to start: " ++ code ++ "\n" ++ message) model.stderr
+                            |> Task.map (\_ -> {})
+                            |> Task.onError (\_ -> Task.succeed {})
                             |> Task.execute
                     }
         
-        GotRequest req res ->
+        GotRequest { request = req, response = res } ->
             { model = model
             , command = 
                 if req.url.path == "/george.jpeg" then
                     FileSystem.readFile model.fsPermission (Path.fromPosixString "./public/george.jpeg")
-                        |> Task.attempt (GotJpeg res)
+                        |> Task.attempt (\fileOp -> GotJpeg { response = res, result = fileOp })
                 else
                     htmlResponse req res
             }
         
-        GotJpeg response (Ok bytes) ->
+        GotJpeg { response, result = (Ok bytes) } ->
             { model = model
             , command =
                 response
@@ -96,7 +99,7 @@ update msg model =
                     |> Response.send
             }
 
-        GotJpeg response (Err _) ->
+        GotJpeg { response, result = (Err _) } ->
             { model = model
             , command =
                 response
@@ -110,7 +113,7 @@ update msg model =
 htmlResponse : Http.Request -> Response -> Cmd Msg
 htmlResponse req res =
     let
-        { body, status } = case { method = req.method, path = req.url.path } of
+        { body, status } = when { method = req.method, path = req.url.path } is
             { method = GET, path = "/" } ->
                 { body = "Welcome!"
                 , status = 200
@@ -156,9 +159,9 @@ htmlResponse req res =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.server of
+    when model.server is
         Just server ->
-            Http.onRequest server GotRequest
+            Http.onRequest server <| \req res -> GotRequest { request = req, response = res }
 
         Nothing ->
             Sub.none
