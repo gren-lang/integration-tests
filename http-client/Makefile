@@ -1,5 +1,5 @@
 app: Makefile gren.json node_modules
-	GREN_BIN=../../compiler/gren node ../../compiler/cli.js make --optimize src/Main.gren --output=bin/app
+	npx gren make --optimize src/Main.gren --output=bin/app
 
 .PHONY: test
 test: app node_modules
