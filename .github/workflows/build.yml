@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  validate-code-formatting:
+  integration-tests:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
