@@ -9,7 +9,7 @@ export function mochaGlobalSetup() {
   return new Promise(resolve => {
     setTimeout(() => {
       resolve({});
-    }, 100);
+    }, 1000);
   })
 }
 
