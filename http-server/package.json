@@ -1,10 +1,11 @@
 {
-  "private": true,
-  "devDependencies": {
-    "@playwright/test": "^1.33.0",
-    "gren-lang": "0.5.0"
-  },
   "scripts": {
-    "postinstall": "npx playwright install"
+    "test": "mocha --require test/fixtures.mjs"
+  },
+  "dependencies": {
+    "clet": "^1.0.1",
+    "gren-lang": "^0.5.0",
+    "mocha": "^10.2.0",
+    "supertest": "^7.0.0"
   }
 }

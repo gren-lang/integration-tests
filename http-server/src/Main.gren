@@ -153,7 +153,7 @@ htmlResponse req res =
         |> Response.setStatus status
         |> Response.setHeader "Content-type" "text/html"
         |> Response.setHeader "X-Custom-Header" "hey there"
-        |> Response.setBody ("<html>" ++ body ++ "</html>")
+        |> Response.setBody body
         |> Response.send
 
 

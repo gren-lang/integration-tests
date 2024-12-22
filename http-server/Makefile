@@ -1,13 +1,9 @@
-app: Makefile gren.json node_modules
+app: Makefile gren.json src/Main.gren node_modules
 	npx gren make --optimize src/Main.gren --output=app
-
-.PHONY: serve
-serve: app
-	node app
 
 .PHONY: test
 test: app node_modules
-	npx playwright test -x
+	npm test
 
 node_modules: package.json package-lock.json
 	npm install
