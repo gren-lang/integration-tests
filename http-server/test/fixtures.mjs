@@ -5,11 +5,11 @@ let proc;
 
 export function mochaGlobalSetup() {
   const appPath = path.resolve(import.meta.dirname, "../app");
-  proc = childProc.exec(appPath);
+  proc = childProc.fork(appPath);
   return new Promise(resolve => {
     setTimeout(() => {
       resolve({});
-    }, 1000);
+    }, 100);
   })
 }
 
