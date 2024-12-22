@@ -1,9 +1,11 @@
+import * as path from "node:path";
 import * as childProc from "node:child_process";
 
 let proc;
 
 export function mochaGlobalSetup() {
-  proc = childProc.exec("./app");
+  const appPath = path.resolve(import.meta.dirname, "../app");
+  proc = childProc.exec(appPath);
   return new Promise(resolve => {
     setTimeout(() => {
       resolve({});
