@@ -35,9 +35,9 @@ describe("Requests", () => {
     assert.equal(res1.headers["content-type"], "text/html");
     assert.equal(res1.text, "You posted: some data");
 
-    const res2 = await request(url).put("/howdy");
+    const res2 = await request(url).put("/howdy?with=params");
     assert.equal(res2.headers["content-type"], "text/html");
-    assert.equal(res2.text, "Not found: PUT /howdy");
+    assert.equal(res2.text, "Not found: PUT http://localhost:3000/howdy?with=params");
   });
 
   // Can't actually test this because node:http doesn't support custom methods.
